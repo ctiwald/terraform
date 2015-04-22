@@ -47,6 +47,13 @@ func resourceAwsInstance() *schema.Resource {
 				ForceNew: true,
 			},
 
+			"placement_group": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+				ForceNew: true,
+			},
+
 			"instance_type": &schema.Schema{
 				Type:     schema.TypeString,
 				Required: true,
@@ -312,6 +319,7 @@ func resourceAwsInstanceCreate(d *schema.ResourceData, meta interface{}) error {
 
 	placement := &ec2.Placement{
 		AvailabilityZone: aws.String(d.Get("availability_zone").(string)),
+		GroupName:        aws.String(d.Get("placement_group").(string)),
 	}
 
 	if hasSubnet {
@@ -533,6 +541,11 @@ func resourceAwsInstanceCreate(d *schema.ResourceData, meta interface{}) error {
 		d.SetConnInfo(map[string]string{
 			"type": "ssh",
 			"host": *instance.PublicIPAddress,
+		})
+	} else if instance.PrivateIPAddress != nil {
+		d.SetConnInfo(map[string]string{
+			"type": "ssh",
+			"host": *instance.PrivateIPAddress,
 		})
 	}
 

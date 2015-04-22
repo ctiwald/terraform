@@ -114,6 +114,9 @@ type Schema struct {
 	// NOTE: This currently does not work.
 	ComputedWhen []string
 
+	// ConflictsWith is a set of schema keys that conflict with this schema
+	ConflictsWith []string
+
 	// When Deprecated is set, this attribute is deprecated.
 	//
 	// A deprecated field still works, but will probably stop working in near
@@ -381,6 +384,8 @@ func (m schemaMap) Input(
 			fallthrough
 		case TypeFloat:
 			fallthrough
+		case TypeSet:
+			continue
 		case TypeString:
 			value, err = m.inputString(input, k, v)
 		default:
@@ -434,6 +439,22 @@ func (m schemaMap) InternalValidate() error {
 
 		if len(v.ComputedWhen) > 0 && !v.Computed {
 			return fmt.Errorf("%s: ComputedWhen can only be set with Computed", k)
+		}
+
+		if len(v.ConflictsWith) > 0 && v.Required {
+			return fmt.Errorf("%s: ConflictsWith cannot be set with Required", k)
+		}
+
+		if len(v.ConflictsWith) > 0 {
+			for _, key := range v.ConflictsWith {
+				if m[key].Required {
+					return fmt.Errorf("%s: ConflictsWith cannot contain Required attribute (%s)", k, key)
+				}
+
+				if m[key].Computed || len(m[key].ComputedWhen) > 0 {
+					return fmt.Errorf("%s: ConflictsWith cannot contain Computed(When) attribute (%s)", k, key)
+				}
+			}
 		}
 
 		if v.Type == TypeList || v.Type == TypeSet {
@@ -626,7 +647,7 @@ func (m schemaMap) diffMap(
 
 	// First get all the values from the state
 	var stateMap, configMap map[string]string
-	o, n, _, _ := d.diffChange(k)
+	o, n, _, nComputed := d.diffChange(k)
 	if err := mapstructure.WeakDecode(o, &stateMap); err != nil {
 		return fmt.Errorf("%s: %s", k, err)
 	}
@@ -634,28 +655,40 @@ func (m schemaMap) diffMap(
 		return fmt.Errorf("%s: %s", k, err)
 	}
 
+	// Keep track of whether the state _exists_ at all prior to clearing it
+	stateExists := o != nil
+
 	// Delete any count values, since we don't use those
 	delete(configMap, "#")
 	delete(stateMap, "#")
 
-	// Check if the number of elements has changed. If we're computing
-	// a list and there isn't a config, then it hasn't changed.
+	// Check if the number of elements has changed.
 	oldLen, newLen := len(stateMap), len(configMap)
 	changed := oldLen != newLen
 	if oldLen != 0 && newLen == 0 && schema.Computed {
 		changed = false
 	}
-	computed := oldLen == 0 && newLen == 0 && schema.Computed
-	if changed || computed {
+
+	// It is computed if we have no old value, no new value, the schema
+	// says it is computed, and it didn't exist in the state before. The
+	// last point means: if it existed in the state, even empty, then it
+	// has already been computed.
+	computed := oldLen == 0 && newLen == 0 && schema.Computed && !stateExists
+
+	// If the count has changed or we're computed, then add a diff for the
+	// count. "nComputed" means that the new value _contains_ a value that
+	// is computed. We don't do granular diffs for this yet, so we mark the
+	// whole map as computed.
+	if changed || computed || nComputed {
 		countSchema := &Schema{
 			Type:     TypeInt,
-			Computed: schema.Computed,
+			Computed: schema.Computed || nComputed,
 			ForceNew: schema.ForceNew,
 		}
 
 		oldStr := strconv.FormatInt(int64(oldLen), 10)
 		newStr := ""
-		if !computed {
+		if !computed && !nComputed {
 			newStr = strconv.FormatInt(int64(newLen), 10)
 		} else {
 			oldStr = ""
@@ -913,7 +946,31 @@ func (m schemaMap) validate(
 			"%q: this field cannot be set", k)}
 	}
 
+	err := m.validateConflictingAttributes(k, schema, c)
+	if err != nil {
+		return nil, []error{err}
+	}
+
 	return m.validateType(k, raw, schema, c)
+}
+
+func (m schemaMap) validateConflictingAttributes(
+	k string,
+	schema *Schema,
+	c *terraform.ResourceConfig) error {
+
+	if len(schema.ConflictsWith) == 0 {
+		return nil
+	}
+
+	for _, conflicting_key := range schema.ConflictsWith {
+		if value, ok := c.Get(conflicting_key); ok {
+			return fmt.Errorf(
+				"%q: conflicts with %s (%#v)", k, conflicting_key, value)
+		}
+	}
+
+	return nil
 }
 
 func (m schemaMap) validateList(
@@ -1021,7 +1078,7 @@ func (m schemaMap) validateObject(
 	}
 
 	// Detect any extra/unknown keys and report those as errors.
-	raw, _ := c.Get(k)
+	raw, _ := c.GetRaw(k)
 	if m, ok := raw.(map[string]interface{}); ok {
 		for subk, _ := range m {
 			if _, ok := schema[subk]; !ok {

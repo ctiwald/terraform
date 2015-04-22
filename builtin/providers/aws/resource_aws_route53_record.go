@@ -44,6 +44,17 @@ func resourceAwsRoute53Record() *schema.Resource {
 				Required: true,
 			},
 
+			"weight": &schema.Schema{
+				Type:     schema.TypeInt,
+				Optional: true,
+			},
+
+			"set_identifier": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+
 			"records": &schema.Schema{
 				Type:     schema.TypeSet,
 				Elem:     &schema.Schema{Type: schema.TypeString},
@@ -133,7 +144,15 @@ func resourceAwsRoute53RecordCreate(d *schema.ResourceData, meta interface{}) er
 	changeInfo := respRaw.(*route53.ChangeResourceRecordSetsOutput).ChangeInfo
 
 	// Generate an ID
-	d.SetId(fmt.Sprintf("%s_%s_%s", zone, d.Get("name").(string), d.Get("type").(string)))
+	vars := []string{
+		zone,
+		d.Get("name").(string),
+		d.Get("type").(string),
+	}
+	if v, ok := d.GetOk("set_identifier"); ok {
+		vars = append(vars, v.(string))
+	}
+	d.SetId(strings.Join(vars, "_"))
 
 	// Wait until we are done
 	wait = resource.StateChangeConf{
@@ -175,6 +194,10 @@ func resourceAwsRoute53RecordRead(d *schema.ResourceData, meta interface{}) erro
 		StartRecordType: aws.String(d.Get("type").(string)),
 	}
 
+	if v, ok := d.GetOk("set_identifier"); ok {
+		lopts.StartRecordIdentifier = aws.String(v.(string))
+	}
+
 	resp, err := conn.ListResourceRecordSets(lopts)
 	if err != nil {
 		return err
@@ -191,6 +214,10 @@ func resourceAwsRoute53RecordRead(d *schema.ResourceData, meta interface{}) erro
 			continue
 		}
 
+		if lopts.StartRecordIdentifier != nil && *record.SetIdentifier != *lopts.StartRecordIdentifier {
+			continue
+		}
+
 		found = true
 
 		err := d.Set("records", flattenResourceRecords(record.ResourceRecords))
@@ -198,6 +225,8 @@ func resourceAwsRoute53RecordRead(d *schema.ResourceData, meta interface{}) erro
 			return fmt.Errorf("[DEBUG] Error setting records for: %s, error: %#v", en, err)
 		}
 		d.Set("ttl", record.TTL)
+		d.Set("weight", record.Weight)
+		d.Set("set_identifier", record.SetIdentifier)
 
 		break
 	}
@@ -294,6 +323,15 @@ func resourceAwsRoute53RecordBuildSet(d *schema.ResourceData, zoneName string) (
 		TTL:             aws.Long(int64(d.Get("ttl").(int))),
 		ResourceRecords: records,
 	}
+
+	if v, ok := d.GetOk("weight"); ok {
+		rec.Weight = aws.Long(int64(v.(int)))
+	}
+
+	if v, ok := d.GetOk("set_identifier"); ok {
+		rec.SetIdentifier = aws.String(v.(string))
+	}
+
 	return rec, nil
 }
 
