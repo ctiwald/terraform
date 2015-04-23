@@ -48,4 +48,12 @@ The following arguments are supported:
 
 ## Attribute Reference
 
-This resource has no attributes.
+* `id` - The instance profile's ID.
+* `arn` - The ARN assigned by AWS to the instance profile.
+* `create_date` - The creation timestamp of the instance profile.
+* `name` - The instance profile's name.
+* `path` - The path of the instance profile in IAM.
+* `roles` - The list of roles assigned to the instance profile.
+* `unique_id` - The [unique ID][1] assigned by AWS.
+
+  [1]: http://docs.aws.amazon.com/IAM/latest/UserGuide/Using_Identifiers.html#GUIDs

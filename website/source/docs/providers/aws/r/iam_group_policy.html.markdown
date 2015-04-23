@@ -45,8 +45,11 @@ The following arguments are supported:
 * `policy` - (Required) The policy document. This is a JSON formatted string.
   The heredoc syntax or `file` funciton is helpful here.
 * `name` - (Required) Name of the policy.
-* `user` - (Required) IAM group to which to attach this policy.
+* `user` - (Required) The IAM group to attach to the policy.
 
 ## Attributes Reference
 
-This resource has no attributes.
+* `id` - The group policy ID.
+* `group` - The group to which this policy applies.
+* `name` - The name of the policy.
+* `policy` - The policy document attached to the group.
