@@ -20,9 +20,15 @@ IMPROVEMENTS:
       protect against accidents. [GH-1595]
   * provider/aws: `aws_instance` supports placement groups [GH-1358]
   * provider/aws: `aws_elb` supports in-place changing of listeners [GH-1619]
-  * provider/aws: `aws_elb` supports connecion draining settings [GH-1502]
+  * provider/aws: `aws_elb` supports connection draining settings [GH-1502]
+  * provider/aws: `aws_elb` increase default idle timeout to 60s [GH-1646]
   * provider/aws: `aws_route53_record` supports weighted sets [GH-1578]
   * provider/aws: `aws_route53_zone` exports nameservers [GH-1525]
+  * provider/aws: `aws_security_group` name becomes optional and can be
+      automatically set to a unique identifier; this helps with
+      `create_before_destroy` scenarios [GH-1632]
+  * provider/aws: `aws_security_group` description becomes optional with a
+      static default value [GH-1632]
   * provider/aws: automatically set the private IP as the SSH address
       if not specified and no public IP is available [GH-1623]
   * provider/docker: `docker_container` can specify links [GH-1564]
@@ -48,6 +54,8 @@ BUG FIXES:
   * core: validation added to check for `self` variables in modules [GH-1609]
   * core: fix edge case where validation didn't pick up unknown fields
       if the value was computed [GH-1507]
+  * core: Fix issue where values in sets on resources couldn't contain
+      hyphens. [GH-1641]
   * command: remote states with uppercase types work [GH-1356]
   * provider/aws: launch configuration ID set after create success [GH-1518]
   * provider/aws: manually deleted S3 buckets are refreshed properly [GH-1574]
