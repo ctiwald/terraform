@@ -87,6 +87,9 @@ func instanceProfileRemoveRole(iamconn *iam.IAM, profileName, roleName string) e
 	}
 
 	_, err := iamconn.RemoveRoleFromInstanceProfile(request)
+	if iamerr, ok := err.(aws.APIError); ok && iamerr.Code == "NoSuchEntity" {
+		return nil
+	}
 	return err
 }
 
@@ -124,6 +127,16 @@ func instanceProfileSetRoles(d *schema.ResourceData, iamconn *iam.IAM) error {
 	return nil
 }
 
+func instanceProfileRemoveAllRoles(d *schema.ResourceData, iamconn *iam.IAM) error {
+	for _, role := range d.Get("roles").(*schema.Set).List() {
+		err := instanceProfileRemoveRole(iamconn, d.Id(), role.(string))
+		if err != nil {
+			return fmt.Errorf("Error removing role %s from IAM instance profile %s: %s", role, d.Id(), err)
+		}
+	}
+	return nil
+}
+
 func resourceAwsIamInstanceProfileUpdate(d *schema.ResourceData, meta interface{}) error {
 	iamconn := meta.(*AWSClient).iamconn
 
@@ -155,6 +168,10 @@ func resourceAwsIamInstanceProfileRead(d *schema.ResourceData, meta interface{})
 
 func resourceAwsIamInstanceProfileDelete(d *schema.ResourceData, meta interface{}) error {
 	iamconn := meta.(*AWSClient).iamconn
+
+	if err := instanceProfileRemoveAllRoles(d, iamconn); err != nil {
+		return err
+	}
 
 	request := &iam.DeleteInstanceProfileInput{
 		InstanceProfileName: aws.String(d.Id()),
