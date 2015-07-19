@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/codedeploy"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
@@ -54,6 +55,7 @@ type AWSClient struct {
 	kinesisconn     *kinesis.Kinesis
 	elasticacheconn *elasticache.ElastiCache
 	lambdaconn      *lambda.Lambda
+	codedeployconn  *codedeploy.CodeDeploy
 }
 
 // Client configures and returns a fully initailized AWSClient
@@ -141,6 +143,9 @@ func (c *Config) Client() (interface{}, error) {
 
 		log.Println("[INFO] Initializing CloudWatch SDK connection")
 		client.cloudwatchconn = cloudwatch.New(awsConfig)
+
+		log.Println("[INFO] Initializing CodeDeploy Connection")
+		client.codedeployconn = codedeploy.New(awsConfig)
 	}
 
 	if len(errs) > 0 {
