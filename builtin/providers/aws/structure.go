@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/directoryservice"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -278,6 +279,26 @@ func flattenAccessLog(l *elb.AccessLog) []map[string]interface{} {
 	return result
 }
 
+// Takes the result of flatmap.Expand for an array of step adjustments and
+// returns a []*autoscaling.StepAdjustment.
+func expandStepAdjustments(configured []interface{}) []*autoscaling.StepAdjustment {
+	var adjustments []*autoscaling.StepAdjustment
+
+	// Loop over our configured step adjustments and create an array
+	// of aws-sdk-go compatible objects
+	for _, raw := range configured {
+		data := raw.(map[string]interface{})
+		a := &autoscaling.StepAdjustment{
+			MetricIntervalLowerBound: aws.Float64(data["metric_interval_lower_bound"].(float64)),
+			MetricIntervalUpperBound: aws.Float64(data["metric_interval_upper_bound"].(float64)),
+			ScalingAdjustment:        aws.Int64(int64(data["scaling_adjustment"].(int))),
+		}
+		adjustments = append(adjustments, a)
+	}
+
+	return adjustments
+}
+
 // Flattens a health check into something that flatmap.Flatten()
 // can handle
 func flattenHealthCheck(check *elb.HealthCheck) []map[string]interface{} {
@@ -482,6 +503,20 @@ func flattenAttachment(a *ec2.NetworkInterfaceAttachment) map[string]interface{}
 	att["device_index"] = *a.DeviceIndex
 	att["attachment_id"] = *a.AttachmentId
 	return att
+}
+
+// Flattens step adjustments into a list of map[string]interface.
+func flattenStepAdjustments(adjustments []*autoscaling.StepAdjustment) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(adjustments))
+	for _, raw := range adjustments {
+		a := map[string]interface{}{
+			"metric_interval_lower_bound": *raw.MetricIntervalLowerBound,
+			"metric_interval_upper_bound": *raw.MetricIntervalUpperBound,
+			"scaling_adjustment":          *raw.ScalingAdjustment,
+		}
+		result = append(result, a)
+	}
+	return result
 }
 
 func flattenResourceRecords(recs []*route53.ResourceRecord) []string {

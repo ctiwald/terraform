@@ -47,6 +47,7 @@ The following arguments are supported:
 * `adjustment_type` - (Required) Specifies whether the `scaling_adjustment` is an absolute number or a percentage of the current capacity. Valid values are `ChangeInCapacity`, `ExactCapacity`, and `PercentChangeInCapacity`.
 * `scaling_adjustment` - (Required) The number of instances by which to scale. `adjustment_type` determines the interpretation of this number (e.g., as an absolute number or as a percentage of the existing Auto Scaling group size). A positive increment adds to the current capacity and a negative value removes from the current capacity.
 * `cooldown` - (Optional) The amount of time, in seconds, after a scaling activity completes and before the next scaling activity can start.
+* `policy_type` - (Optional) The policy type, either "SimpleScaling" or "StepScaling". If this value isn't provided, AWS will default to "SimpleScaling."
 * `min_adjustment_step` - (Optional) Used with `adjustment_type` with the value `PercentChangeInCapacity`, the scaling policy changes the `desired_capacity` of the Auto Scaling group by at least the number of instances specified in the value.
 
 ## Attribute Reference
