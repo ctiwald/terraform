@@ -23,6 +23,7 @@ func TestAccAWSAutoscalingPolicy_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckScalingPolicyExists("aws_autoscaling_policy.foobar", &policy),
 					resource.TestCheckResourceAttr("aws_autoscaling_policy.foobar", "adjustment_type", "ChangeInCapacity"),
+					resource.TestCheckResourceAttr("aws_autoscaling_policy.foobar", "policy_type", "StepScaling"),
 					resource.TestCheckResourceAttr("aws_autoscaling_policy.foobar", "cooldown", "300"),
 				),
 			},
@@ -107,9 +108,12 @@ resource "aws_autoscaling_group" "foobar" {
 
 resource "aws_autoscaling_policy" "foobar" {
     name = "foobar"
-    scaling_adjustment = 4
     adjustment_type = "ChangeInCapacity"
     cooldown = 300
+    policy_type = "StepScaling"
+    step_adjustment = {
+	    scaling_adjustment = 2
+    }
     autoscaling_group_name = "${aws_autoscaling_group.foobar.name}"
 }
 `)

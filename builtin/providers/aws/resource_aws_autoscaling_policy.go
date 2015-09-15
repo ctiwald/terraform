@@ -1,11 +1,13 @@
 package aws
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/hashicorp/terraform/helper/hashcode"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 
@@ -35,6 +37,10 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+			"policy_type": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"cooldown": &schema.Schema{
 				Type:     schema.TypeInt,
 				Optional: true,
@@ -44,8 +50,31 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 				Optional: true,
 			},
 			"scaling_adjustment": &schema.Schema{
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:          schema.TypeInt,
+				Optional:      true,
+				ConflictsWith: []string{"step_adjustment"},
+			},
+			"step_adjustment": &schema.Schema{
+				Type:          schema.TypeSet,
+				Optional:      true,
+				ConflictsWith: []string{"scaling_adjustment"},
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"metric_interval_lower_bound": &schema.Schema{
+							Type:     schema.TypeFloat,
+							Optional: true,
+						},
+						"metric_interval_upper_bound": &schema.Schema{
+							Type:     schema.TypeFloat,
+							Optional: true,
+						},
+						"scaling_adjustment": &schema.Schema{
+							Type:     schema.TypeInt,
+							Required: true,
+						},
+					},
+				},
+				Set: resourceAwsAutoscalingScalingAdjustmentHash,
 			},
 		},
 	}
@@ -54,7 +83,10 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 func resourceAwsAutoscalingPolicyCreate(d *schema.ResourceData, meta interface{}) error {
 	autoscalingconn := meta.(*AWSClient).autoscalingconn
 
-	params := getAwsAutoscalingPutScalingPolicyInput(d)
+	params, err := getAwsAutoscalingPutScalingPolicyInput(d)
+	if err != nil {
+		return err
+	}
 
 	log.Printf("[DEBUG] AutoScaling PutScalingPolicy: %#v", params)
 	resp, err := autoscalingconn.PutScalingPolicy(&params)
@@ -84,10 +116,12 @@ func resourceAwsAutoscalingPolicyRead(d *schema.ResourceData, meta interface{}) 
 	d.Set("adjustment_type", p.AdjustmentType)
 	d.Set("autoscaling_group_name", p.AutoScalingGroupName)
 	d.Set("cooldown", p.Cooldown)
+	d.Set("policy_type", p.PolicyType)
 	d.Set("min_adjustment_step", p.MinAdjustmentStep)
 	d.Set("arn", p.PolicyARN)
 	d.Set("name", p.PolicyName)
 	d.Set("scaling_adjustment", p.ScalingAdjustment)
+	d.Set("step_adjustment", flattenStepAdjustments(p.StepAdjustments))
 
 	return nil
 }
@@ -95,7 +129,10 @@ func resourceAwsAutoscalingPolicyRead(d *schema.ResourceData, meta interface{}) 
 func resourceAwsAutoscalingPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
 	autoscalingconn := meta.(*AWSClient).autoscalingconn
 
-	params := getAwsAutoscalingPutScalingPolicyInput(d)
+	params, inputErr := getAwsAutoscalingPutScalingPolicyInput(d)
+	if inputErr != nil {
+		return inputErr
+	}
 
 	log.Printf("[DEBUG] Autoscaling Update Scaling Policy: %#v", params)
 	_, err := autoscalingconn.PutScalingPolicy(&params)
@@ -128,8 +165,10 @@ func resourceAwsAutoscalingPolicyDelete(d *schema.ResourceData, meta interface{}
 	return nil
 }
 
-// PutScalingPolicy seems to require all params to be resent, so create and update can share this common function
-func getAwsAutoscalingPutScalingPolicyInput(d *schema.ResourceData) autoscaling.PutScalingPolicyInput {
+// PutScalingPolicy seems to require all params to be resent, so create and
+// update can share this common function. This function will error if certain
+// mutually exclusive values are set.
+func getAwsAutoscalingPutScalingPolicyInput(d *schema.ResourceData) (autoscaling.PutScalingPolicyInput, error) {
 	var params = autoscaling.PutScalingPolicyInput{
 		AutoScalingGroupName: aws.String(d.Get("autoscaling_group_name").(string)),
 		PolicyName:           aws.String(d.Get("name").(string)),
@@ -143,15 +182,31 @@ func getAwsAutoscalingPutScalingPolicyInput(d *schema.ResourceData) autoscaling.
 		params.Cooldown = aws.Int64(int64(v.(int)))
 	}
 
+	if v, ok := d.GetOk("policy_type"); ok {
+		params.PolicyType = aws.String(v.(string))
+	}
+
 	if v, ok := d.GetOk("scaling_adjustment"); ok {
 		params.ScalingAdjustment = aws.Int64(int64(v.(int)))
+	}
+
+	if v, ok := d.GetOk("step_adjustment"); ok {
+		params.StepAdjustments = expandStepAdjustments(v.(*schema.Set).List())
 	}
 
 	if v, ok := d.GetOk("min_adjustment_step"); ok {
 		params.MinAdjustmentStep = aws.Int64(int64(v.(int)))
 	}
 
-	return params
+	// Validate our final input to confirm it won't error when sent to AWS.
+	if *params.PolicyType == "SimpleScaling" && params.StepAdjustments != nil {
+		return params, fmt.Errorf("SimpleScaling policy types cannot use step_adjustments!")
+	}
+	if *params.PolicyType == "StepScaling" && params.ScalingAdjustment != nil {
+		return params, fmt.Errorf("StepScaling policy types cannot use scaling_adjustment!")
+	}
+
+	return params, nil
 }
 
 func getAwsAutoscalingPolicy(d *schema.ResourceData, meta interface{}) (*autoscaling.ScalingPolicy, error) {
@@ -178,4 +233,18 @@ func getAwsAutoscalingPolicy(d *schema.ResourceData, meta interface{}) (*autosca
 
 	// policy not found
 	return nil, nil
+}
+
+func resourceAwsAutoscalingScalingAdjustmentHash(v interface{}) int {
+	var buf bytes.Buffer
+	m := v.(map[string]interface{})
+	if v, ok := m["metric_interval_lower_bound"]; ok {
+		buf.WriteString(fmt.Sprintf("%f-", v.(float64)))
+	}
+	if v, ok := m["metric_interval_upper_bound"]; ok {
+		buf.WriteString(fmt.Sprintf("%f-", v.(float64)))
+	}
+	buf.WriteString(fmt.Sprintf("%f-", m["scaling_adjustment"].(int)))
+
+	return hashcode.String(buf.String())
 }
