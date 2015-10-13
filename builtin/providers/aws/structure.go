@@ -243,7 +243,7 @@ func expandStepAdjustments(configured []interface{}) []*autoscaling.StepAdjustme
 		a := &autoscaling.StepAdjustment{
 			MetricIntervalLowerBound: aws.Float64(data["metric_interval_lower_bound"].(float64)),
 			MetricIntervalUpperBound: aws.Float64(data["metric_interval_upper_bound"].(float64)),
-			ScalingAdjustment:        aws.Int64(data["scaling_adjustment"].(int64)),
+			ScalingAdjustment:        aws.Int64(int64(data["scaling_adjustment"].(int))),
 		}
 		adjustments = append(adjustments, a)
 	}

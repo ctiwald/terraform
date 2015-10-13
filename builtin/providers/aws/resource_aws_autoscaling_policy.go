@@ -40,6 +40,7 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 			"policy_type": &schema.Schema{
 				Type:     schema.TypeString,
 				Optional: true,
+				Default:  "SimpleScaling", // preserve AWS's default to make validation easier.
 			},
 			"cooldown": &schema.Schema{
 				Type:     schema.TypeInt,
@@ -202,8 +203,14 @@ func getAwsAutoscalingPutScalingPolicyInput(d *schema.ResourceData) (autoscaling
 	if *params.PolicyType == "SimpleScaling" && params.StepAdjustments != nil {
 		return params, fmt.Errorf("SimpleScaling policy types cannot use step_adjustments!")
 	}
+	if *params.PolicyType == "SimpleScaling" && params.StepAdjustments != nil {
+		return params, fmt.Errorf("SimpleScaling policy types cannot use step_adjustments!")
+	}
 	if *params.PolicyType == "StepScaling" && params.ScalingAdjustment != nil {
 		return params, fmt.Errorf("StepScaling policy types cannot use scaling_adjustment!")
+	}
+	if *params.PolicyType == "StepScaling" && params.Cooldown != nil {
+		return params, fmt.Errorf("StepScaling policy types cannot use cooldown!")
 	}
 
 	return params, nil
