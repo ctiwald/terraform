@@ -69,6 +69,7 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 			"min_adjustment_step": &schema.Schema{
 				Type:          schema.TypeInt,
 				Optional:      true,
+				Deprecated:    "Use min_adjustment_magnitude instead.",
 				ConflictsWith: []string{"min_adjustment_magnitude"},
 			},
 			"scaling_adjustment": &schema.Schema{
