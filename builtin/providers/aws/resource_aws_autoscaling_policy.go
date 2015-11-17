@@ -53,14 +53,6 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 			"metric_aggregation_type": &schema.Schema{
 				Type:     schema.TypeString,
 				Optional: true,
-				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
-					value := v.(string)
-					if value != "Minimum" || value != "Maximum" || value != "Average" {
-						errors.append(errors, fmt.Errorf(
-							"%q must be 'Average', 'Minimum', or 'Maximum'", k))
-					}
-					return
-				},
 			},
 			"min_adjustment_magnitude": &schema.Schema{
 				Type:     schema.TypeInt,

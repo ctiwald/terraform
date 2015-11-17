@@ -123,7 +123,6 @@ resource "aws_autoscaling_policy" "foobar_simple" {
 	cooldown = 300
 	policy_type = "SimpleScaling"
 	scaling_adjustment = 2
-	min_adjustment_magnitude = 2
 	autoscaling_group_name = "${aws_autoscaling_group.foobar.name}"
 }
 
@@ -132,12 +131,10 @@ resource "aws_autoscaling_policy" "foobar_step" {
 	adjustment_type = "ChangeInCapacity"
 	policy_type = "StepScaling"
 	estimated_instance_warmup = 200
-	metric_aggregation_type = Minimum
-	min_adjustment_magnitude = 2
+	metric_aggregation_type = "Minimum"
 	step_adjustment {
 		scaling_adjustment = 1
 		metric_interval_lower_bound = 2
-		metric_interval_upper_bound = 3
 	}
 	autoscaling_group_name = "${aws_autoscaling_group.foobar.name}"
 }

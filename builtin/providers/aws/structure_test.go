@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elasticache"
 	"github.com/aws/aws-sdk-go/service/elb"
@@ -460,7 +461,7 @@ func TestExpandStepAdjustments(t *testing.T) {
 			"scaling_adjustment":          1,
 		},
 	}
-	parameters, err := expandStepAdjustments(expanded)
+	parameters := expandStepAdjustments(expanded)
 	if err != nil {
 		t.Fatalf("bad: %#v", err)
 	}
@@ -653,13 +654,15 @@ func TestFlattenAttachment(t *testing.T) {
 }
 
 func TestflattenStepAdjustments(t *testing.T) {
-	expanded := &autoscaling.StepAdjustment{
-		MetricIntervalLowerBound: aws.Float64(1.0),
-		MetricIntervalUpperBound: aws.Float64(2.0),
-		ScalingAdjustment:        aws.Int64(int64(1)),
+	expanded := []*autoscaling.StepAdjustment{
+		&autoscaling.StepAdjustment{
+			MetricIntervalLowerBound: aws.Float64(1.0),
+			MetricIntervalUpperBound: aws.Float64(2.0),
+			ScalingAdjustment:        aws.Int64(int64(1)),
+		},
 	}
 
-	result := flattenStepAdjustments(expanded)
+	result := flattenStepAdjustments(expanded)[0]
 	if result == nil {
 		t.Fatal("expected result to have value, but got nil")
 	}
