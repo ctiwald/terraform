@@ -461,7 +461,7 @@ func TestExpandStepAdjustments(t *testing.T) {
 			"scaling_adjustment":          1,
 		},
 	}
-	parameters := expandStepAdjustments(expanded)
+	parameters, err := expandStepAdjustments(expanded)
 	if err != nil {
 		t.Fatalf("bad: %#v", err)
 	}

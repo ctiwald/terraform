@@ -76,11 +76,11 @@ func resourceAwsAutoscalingPolicy() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"metric_interval_lower_bound": &schema.Schema{
-							Type:     schema.TypeFloat,
+							Type:     schema.TypeString,
 							Optional: true,
 						},
 						"metric_interval_upper_bound": &schema.Schema{
-							Type:     schema.TypeFloat,
+							Type:     schema.TypeString,
 							Optional: true,
 						},
 						"scaling_adjustment": &schema.Schema{
@@ -217,7 +217,11 @@ func getAwsAutoscalingPutScalingPolicyInput(d *schema.ResourceData) (autoscaling
 	}
 
 	if v, ok := d.GetOk("step_adjustment"); ok {
-		params.StepAdjustments = expandStepAdjustments(v.(*schema.Set).List())
+		steps, err := expandStepAdjustments(v.(*schema.Set).List())
+		if err != nil {
+			return params, fmt.Errorf("metric_interval_lower_bound and metric_interval_upper_bound must be strings!")
+		}
+		params.StepAdjustments = steps
 	}
 
 	if v, ok := d.GetOk("min_adjustment_magnitude"); ok {
@@ -281,10 +285,10 @@ func resourceAwsAutoscalingScalingAdjustmentHash(v interface{}) int {
 	var buf bytes.Buffer
 	m := v.(map[string]interface{})
 	if v, ok := m["metric_interval_lower_bound"]; ok {
-		buf.WriteString(fmt.Sprintf("%f-", v.(float64)))
+		buf.WriteString(fmt.Sprintf("%f-", v))
 	}
 	if v, ok := m["metric_interval_upper_bound"]; ok {
-		buf.WriteString(fmt.Sprintf("%f-", v.(float64)))
+		buf.WriteString(fmt.Sprintf("%f-", v))
 	}
 	buf.WriteString(fmt.Sprintf("%f-", m["scaling_adjustment"].(int)))
 

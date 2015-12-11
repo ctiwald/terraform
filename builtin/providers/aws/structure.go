@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -282,22 +282,38 @@ func flattenAccessLog(l *elb.AccessLog) []map[string]interface{} {
 
 // Takes the result of flatmap.Expand for an array of step adjustments and
 // returns a []*autoscaling.StepAdjustment.
-func expandStepAdjustments(configured []interface{}) []*autoscaling.StepAdjustment {
+func expandStepAdjustments(configured []interface{}) ([]*autoscaling.StepAdjustment, error) {
 	var adjustments []*autoscaling.StepAdjustment
 
 	// Loop over our configured step adjustments and create an array
-	// of aws-sdk-go compatible objects
+	// of aws-sdk-go compatible objects. We're forced to convert strings
+	// to floats here because there's no way to detect whether or not
+	// an uninitialized, optional schema element is "0.0" deliberately.
+	// With strings, we can test for "", which is definitely an empty
+	// struct value.
 	for _, raw := range configured {
 		data := raw.(map[string]interface{})
 		a := &autoscaling.StepAdjustment{
-			MetricIntervalLowerBound: aws.Float64(data["metric_interval_lower_bound"].(float64)),
-			MetricIntervalUpperBound: aws.Float64(data["metric_interval_upper_bound"].(float64)),
-			ScalingAdjustment:        aws.Int64(int64(data["scaling_adjustment"].(int))),
+			ScalingAdjustment: aws.Int64(int64(data["scaling_adjustment"].(int))),
+		}
+		if data["metric_interval_lower_bound"] != "" {
+			f, err := strconv.ParseFloat(data["metric_interval_lower_bound"].(string), 64)
+			if err != nil {
+				return nil, err
+			}
+			a.MetricIntervalLowerBound = aws.Float64(f)
+		}
+		if data["metric_interval_upper_bound"] != "" {
+			f, err := strconv.ParseFloat(data["metric_interval_upper_bound"].(string), 64)
+			if err != nil {
+				return nil, err
+			}
+			a.MetricIntervalUpperBound = aws.Float64(f)
 		}
 		adjustments = append(adjustments, a)
 	}
 
-	return adjustments
+	return adjustments, nil
 }
 
 // Flattens a health check into something that flatmap.Flatten()
@@ -511,9 +527,13 @@ func flattenStepAdjustments(adjustments []*autoscaling.StepAdjustment) []map[str
 	result := make([]map[string]interface{}, 0, len(adjustments))
 	for _, raw := range adjustments {
 		a := map[string]interface{}{
-			"metric_interval_lower_bound": *raw.MetricIntervalLowerBound,
-			"metric_interval_upper_bound": *raw.MetricIntervalUpperBound,
-			"scaling_adjustment":          *raw.ScalingAdjustment,
+			"scaling_adjustment": *raw.ScalingAdjustment,
+		}
+		if raw.MetricIntervalUpperBound != nil {
+			a["metric_interval_upper_bound"] = *raw.MetricIntervalUpperBound
+		}
+		if raw.MetricIntervalLowerBound != nil {
+			a["metric_interval_lower_bound"] = *raw.MetricIntervalLowerBound
 		}
 		result = append(result, a)
 	}
